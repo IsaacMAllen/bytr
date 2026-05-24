@@ -1,13 +1,25 @@
 /**
  * Thin fetch wrapper for the m4l-telemetry-api.
  *
- * The API base URL is *always* `/api` in the browser; the dev-server proxies
- * that prefix to whatever backend the user pointed VITE_API_URL at, and in
- * production we expect a reverse-proxy to do the same.  This keeps the
- * frontend bundle environment-agnostic.
+ * - Dev (`vite dev`): we go through Vite's `/api` proxy so requests look
+ *   same-origin to the browser (no CORS preflight, no token in URL).
+ * - Prod (`vite build` on Cloudflare Pages): the Pages origin is *not* the
+ *   API origin, so we hit the API's absolute URL.  VITE_API_URL is inlined
+ *   into the bundle at build time -- set it in your Pages project settings.
  */
 
-const BASE = "/api";
+const BASE = import.meta.env.DEV
+  ? "/api"
+  : (import.meta.env.VITE_API_URL ?? "");
+
+if (!BASE && !import.meta.env.DEV) {
+  // Fail loudly in the browser console rather than silently fetching '/'.
+  // Hosters who forget to set VITE_API_URL get an obvious clue.
+  console.error(
+    "[bytr] VITE_API_URL is not set; API calls will fail.  " +
+      "Set it in your hosting provider's environment variables and rebuild.",
+  );
+}
 
 export class ApiError extends Error {
   constructor(

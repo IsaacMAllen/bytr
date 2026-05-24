@@ -1,0 +1,78 @@
+/* InterVariable + JetBrains Mono via Google Fonts. PostCSS requires
+   @import to precede every other statement, hence the placement above. */
+@import url("https://rsms.me/inter/inter.css");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-feature-settings:
+    "ss01" on,
+    "cv11" on;
+}
+
+/* Scrollbar -- subtle, dark-matched. */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(51 65 85 / 0.6);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105 / 0.8);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Subtle radial backdrop on the app shell (only visible behind translucent
+   surfaces). Picked by eye to match the slate-950 palette. */
+.app-shell {
+  background:
+    radial-gradient(
+      80rem 50rem at 80% -10%,
+      rgb(56 189 248 / 0.06),
+      transparent 60%
+    ),
+    radial-gradient(
+      60rem 40rem at -10% 110%,
+      rgb(167 139 250 / 0.05),
+      transparent 60%
+    ),
+    rgb(8 12 24);
+}
+
+/* Code blocks (event detail, JSON props). */
+.code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-feature-settings: "calt" 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+/* Used by the live-tail "pulse" indicator. */
+@keyframes blink {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 0.2; }
+}
+.live-dot {
+  animation: blink 1.4s ease-in-out infinite;
+}

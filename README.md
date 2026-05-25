@@ -343,17 +343,29 @@ bytr ships via Cloudflare Pages — the build worker just runs `pnpm build`
 and uploads `dist/`.  Two pieces of one-time configuration in the
 Cloudflare dashboard:
 
-1. **Environment variables** → add to both *Production* and *Preview*:
+1. **Build-time env vars for Vite** — `VITE_*` values are baked into
+   the JS bundle during `pnpm build`, not read at Worker runtime.
+   The dashboard tab **Settings → Variables and Secrets** (runtime)
+   shows *"Variables cannot be added to a Worker that only has static
+   assets"* — that is expected; ignore that screen.
 
-   | Name                           | Value                              |
-   | ------------------------------ | ---------------------------------- |
-   | `VITE_CLERK_PUBLISHABLE_KEY`   | `pk_test_…` (dev) / `pk_live_…`    |
-   | `VITE_API_URL`                 | absolute URL of `m4l-telemetry-api`|
+   **Option A (already in repo):** `.env.production` holds
+   `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_API_URL` for production
+   builds.  Cloudflare's build step runs `pnpm build` → Vite loads it
+   automatically.  No dashboard vars needed.
 
-   These must be set as **build-time** vars (the Pages "Environment
-   variables" UI, not "Secrets and Variables → Runtime") because Vite
-   inlines anything `VITE_*`-prefixed at `pnpm build` time.  Trigger a
-   fresh build after editing.
+   **Option B (dashboard):** If your project has a separate **Build**
+   configuration / **Build environment variables** section (not the
+   Worker runtime tab), you can set the same names there instead.
+
+   **Option C (build command):** Prefix the build command:
+
+   ```bash
+   VITE_CLERK_PUBLISHABLE_KEY=pk_live_… VITE_API_URL=https://telemetry.bugbytz.com/ pnpm build
+   ```
+
+   Never put `CLERK_SECRET_KEY` in any of the above — it is server-only
+   and must not be inlined into the static bundle.
 
 2. **SPA routing** — `wrangler.jsonc` at the repo root sets
    `assets.not_found_handling: "single-page-application"` so unmatched

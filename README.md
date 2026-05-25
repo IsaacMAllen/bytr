@@ -36,6 +36,10 @@ your laptop, so you can watch real devices reporting in.
   buttons for IDs, props pretty-printed with a tiny inline JSON highlighter.
 - **Devices** — per-build rollup with a 14-bucket traffic sparkline; click a
   row to open the matching pre-filtered Events view.
+- **Auth** — the entire app is gated behind [Clerk](https://clerk.com).
+  Sign in with Apple is the **only** auth method and sign-ups are
+  restricted to a single allowlisted email — see
+  [Authentication](#authentication).
 - **Dark UI** with sky/violet accents, `Inter` for prose and `JetBrains Mono`
   for IDs / values.
 
@@ -50,6 +54,7 @@ your laptop, so you can watch real devices reporting in.
 | Tables              | **TanStack Table**                          |
 | Charts              | **Recharts**                                |
 | Routing             | React Router v7                             |
+| Auth                | **Clerk** (`@clerk/react`) + `@clerk/themes` — Apple OAuth, single-user allowlist |
 | Toasts              | Sonner                                      |
 | Icons               | Lucide                                      |
 | Time formatting     | date-fns                                    |
@@ -67,6 +72,9 @@ for free.  Every list and detail screen is just a hook + a UI.
 - pnpm 9+ (corepack: `corepack enable && corepack prepare pnpm@latest --activate`)
 - A running `m4l-telemetry-api` reachable from your machine.  By default the
   app proxies `/api` → `http://127.0.0.1:8080`.
+- A **Clerk application** (free tier is fine for dev).  Create one at
+  <https://dashboard.clerk.com> and grab the publishable key — bytr refuses
+  to render without it.  See [Authentication](#authentication) for setup.
 
 If you used the bootstrap script in the API repo, the API is in your local
 `kind` cluster; expose it with:
@@ -89,6 +97,8 @@ make api-status
 ```bash
 cd ~/development/bytr
 pnpm install        # or: make install
+cp .env.example .env.local
+# …then edit .env.local and paste your Clerk publishable key
 pnpm dev            # or: make dev   →  http://127.0.0.1:5173
 ```
 
@@ -98,6 +108,135 @@ target in `VITE_API_URL` (default `http://127.0.0.1:8080`).  Override with:
 ```bash
 VITE_API_URL=http://my-api.internal:8080 pnpm dev
 ```
+
+> If you haven't set `VITE_CLERK_PUBLISHABLE_KEY` the app throws on boot
+> instead of rendering an empty shell — see [Authentication](#authentication).
+
+---
+
+## Authentication
+
+bytr is a single-user product.  The entire app is gated behind **Clerk**
+configured as **Apple-OAuth-only** with sign-ups locked to a single
+allowlisted email.  Apple ID enforces 2FA at the OS layer, so there's no
+in-app MFA gate.
+
+```
+                ┌────────────────┐ no   ┌───────────────────────────┐
+visit any URL ─►│  RequireAuth   │────► │  /sign-in                 │
+                │  (signed in?)  │      │   └─ Clerk <SignIn/>      │
+                └──────┬─────────┘      │      shows ONLY            │
+                       │ yes            │      "Continue with Apple"│
+                       ▼                └────────────┬──────────────┘
+                ┌────────────────┐                   │
+                │  Dashboard /   │                   │ (allowed iff the
+                │  Events /      │ ◄─────────────────┘  Apple-account
+                │  Devices       │                      email is on
+                └────────────────┘                      the allowlist)
+
+/sign-up/*  ──► 301 to /sign-in  (sign-ups are closed)
+```
+
+### 1. Initialise the project with the Clerk CLI
+
+The fastest path is the [Clerk CLI](https://clerk.com/docs/cli):
+
+```bash
+npm install -g clerk         # or: brew install clerk/stable/clerk
+clerk auth login             # browser-based OAuth
+cd ~/development/bytr
+clerk init                   # links this directory to the Clerk app
+                             # and writes VITE_CLERK_PUBLISHABLE_KEY
+                             # into .env.local
+```
+
+After `clerk init` you should have a populated `.env.local` containing
+`VITE_CLERK_PUBLISHABLE_KEY=pk_test_…`.  Sanity-check with:
+
+```bash
+clerk doctor
+```
+
+If you'd rather copy the key by hand, grab it from
+<https://dashboard.clerk.com> → **API Keys** and paste into
+`.env.local`.
+
+### 2. Lock the instance down to "Apple-only, one user"
+
+The CLI can drive all of this — no dashboard clicks required.  These
+commands assume `clerk init` already linked the project.
+
+```bash
+# 1. Restrict the auth surface to Apple OAuth only.
+#    (Every other strategy was disabled when the app was created;
+#    re-assert it here in case you ever flip something on by mistake.)
+clerk config patch --json '{
+  "auth_email":     { "used_for_sign_in": false, "used_for_sign_up": false },
+  "auth_password":  { "enabled": false },
+  "auth_username":  { "used_for_sign_in": false, "used_for_sign_up": false },
+  "auth_phone":     { "used_for_sign_in": false, "used_for_sign_up": false },
+  "auth_passkey":   { "used_for_sign_in": false },
+  "auth_web3":      { "used_for_sign_in": false, "used_for_sign_up": false },
+  "connection_oauth_apple": { "enabled": true, "authenticatable": true }
+}'
+
+# 2. Close public sign-ups; only allowlisted emails may sign up,
+#    and the allowlist is also enforced on sign-in (defence in depth).
+clerk config patch --json '{
+  "auth_access_control": {
+    "sign_up_mode": "restricted",
+    "allowlist_blocklist_enforced_on_sign_in": true
+  }
+}'
+
+# 3. Add the one allowed account.
+clerk api -X POST /allowlist_identifiers \
+  -d '{"identifier":"you@example.com","notify":false}' --yes
+```
+
+Verify the lockdown:
+
+```bash
+clerk api /allowlist_identifiers          # → one entry
+clerk config pull | jq .auth_access_control
+# {
+#   "sign_up_mode": "restricted",
+#   "allowlist_blocklist_enforced_on_sign_in": true,
+#   ...
+# }
+```
+
+> **About Apple OAuth credentials.**  Clerk's *development* instance
+> ships with shared Apple OAuth credentials so this works on
+> `*.accounts.dev` URLs without an Apple Developer account.  For
+> **production** you must register a *Services ID* with Sign in with
+> Apple in the [Apple Developer portal](https://developer.apple.com/account/resources/identifiers/list/serviceId)
+> and paste the Services ID, Team ID, Key ID and `.p8` key into
+> Clerk's Apple connection (CLI: `clerk config patch` on
+> `connection_oauth_apple.{client_id,client_secret,team_id,key_id}`).
+
+### 3. Where the auth code lives
+
+```
+src/
+  main.tsx                          ClerkProvider mounted inside <BrowserRouter>
+  lib/clerk.ts                      Shared dark-theme `appearance` config
+  components/auth/
+    AuthShell.tsx                   Centred card layout for /sign-in
+    AuthLoading.tsx                 Spinner shown while Clerk hydrates
+    RequireAuth.tsx                 Gate: signed in?  → /sign-in if not
+  pages/
+    SignInPage.tsx                  <SignIn routing="path" path="/sign-in"/>
+  components/TopBar.tsx             <UserButton/> in the global header
+```
+
+`/sign-up/*` is wired in `App.tsx` as a 301 to `/sign-in` so stale
+bookmarks don't 404 — the `<SignIn>` card itself doesn't render the
+"Don't have an account? Sign up" footer because we don't pass
+`signUpUrl`.
+
+The `UserButton` in the top bar exposes profile management, the account
+portal and sign-out — no need to hand-roll any of that.
 
 ### Common make targets
 
@@ -137,8 +276,8 @@ stat cards will tick up.
 
 ```
 src/
-  main.tsx                React + QueryClient + Router bootstrap
-  App.tsx                 Lazy-loaded routes (Dashboard / Events / Devices)
+  main.tsx                React + ClerkProvider + QueryClient + Router bootstrap
+  App.tsx                 Routes (public /sign-in + RequireAuth + app)
   index.css               Tailwind base + design-token scrollbars/etc
   vite-env.d.ts
   lib/
@@ -146,11 +285,16 @@ src/
     queries.ts            TanStack Query hooks (centralised query keys)
     time.ts               date-fns helpers + range presets
     utils.ts              cn(), pretty JSON, copyText, formatters
+    clerk.ts              Shared Clerk `appearance` (dark theme + slate palette)
   components/
     ui/                   Headless primitives: Button, Card, Input, Select, Badge, Skeleton, Empty
+    auth/
+      AuthShell.tsx       Centred card layout for /sign-in
+      AuthLoading.tsx     Spinner shown while Clerk hydrates
+      RequireAuth.tsx     Route guard: signed in?  → /sign-in if not
     Layout.tsx            App shell (sidebar + outlet)
     Sidebar.tsx           Logo + nav links
-    TopBar.tsx            Page title + API health pill + global refresh
+    TopBar.tsx            Page title + API health pill + refresh + <UserButton/>
     KindBadge.tsx         Coloured pill per event kind
     LevelBadge.tsx        Coloured pill per severity level
     StatCard.tsx          Big number with a tinted halo
@@ -159,6 +303,7 @@ src/
     EventDetailDrawer.tsx Slide-in panel with copy actions + JsonView
     JsonView.tsx          Tiny inline JSON syntax highlighter
   pages/
+    SignInPage.tsx        Public — Clerk <SignIn/> (Apple-only, dark card)
     Dashboard.tsx
     Events.tsx
     Devices.tsx
@@ -192,9 +337,51 @@ The bundle is fully static.  `pnpm build` produces `dist/` containing
 1. Serves `dist/` for everything except `/api/*`.
 2. Forwards `/api/*` to your `m4l-telemetry-api` Service.
 
-A minimal nginx snippet:
+### Cloudflare Pages (current production target)
+
+bytr ships via Cloudflare Pages — the build worker just runs `pnpm build`
+and uploads `dist/`.  Two pieces of one-time configuration in the
+Cloudflare dashboard:
+
+1. **Environment variables** → add to both *Production* and *Preview*:
+
+   | Name                           | Value                              |
+   | ------------------------------ | ---------------------------------- |
+   | `VITE_CLERK_PUBLISHABLE_KEY`   | `pk_test_…` (dev) / `pk_live_…`    |
+   | `VITE_API_URL`                 | absolute URL of `m4l-telemetry-api`|
+
+   These must be set as **build-time** vars (the Pages "Environment
+   variables" UI, not "Secrets and Variables → Runtime") because Vite
+   inlines anything `VITE_*`-prefixed at `pnpm build` time.  Trigger a
+   fresh build after editing.
+
+2. **`_redirects`** (or **Build → Output → Single-page application**
+   mode) — Cloudflare Pages needs to send every unmatched path to
+   `/index.html` so React Router and Clerk's path-based sub-routes
+   (`/sign-in/sso-callback`, etc.) work.  The simplest is a
+   `public/_redirects` file:
+
+   ```
+   /*    /index.html   200
+   ```
+
+   (already shipped — verify it's there before your first deploy).
+
+3. **Allowed domain in Clerk** — once Cloudflare has assigned the Pages
+   URL (e.g. `bytr.pages.dev`) and any custom domain, add them under
+   <https://dashboard.clerk.com> → **Domains** so Clerk accepts them as
+   valid origins for the publishable key.
+
+> `CLERK_SECRET_KEY` was written to your local `.env.local` by
+> `clerk init` for CLI use, but it is **not** read by the SPA and must
+> **never** be set as a Cloudflare Pages build var — it would leak into
+> the public bundle.
+
+### Generic nginx
 
 ```nginx
+# Catch-all fall-through for the SPA -- critical for Clerk's path-based
+# routing (/sign-in/sso-callback, etc.).
 location / {
     try_files $uri /index.html;
 }

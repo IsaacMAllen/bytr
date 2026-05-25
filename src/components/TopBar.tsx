@@ -1,7 +1,9 @@
 import { CircleDot, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { UserButton } from "@clerk/react";
 import { Button } from "@/components/ui/Button";
 import { useHealth } from "@/lib/queries";
+import { clerkAppearance } from "@/lib/clerk";
 import { cn } from "@/lib/utils";
 
 export function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -39,6 +41,18 @@ export function TopBar({ title, subtitle }: { title: string; subtitle?: string }
         >
           <RefreshCw size={12} /> refresh
         </Button>
+        <div className="ml-1 flex items-center border-l border-slate-800 pl-3">
+          <UserButton
+            appearance={{
+              ...clerkAppearance,
+              elements: {
+                ...clerkAppearance.elements,
+                userButtonAvatarBox: "h-7 w-7",
+              },
+            }}
+            userProfileProps={{ appearance: clerkAppearance }}
+          />
+        </div>
       </div>
     </header>
   );

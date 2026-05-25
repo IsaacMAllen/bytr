@@ -1,0 +1,7 @@
+# Cloudflare Pages SPA fall-through.
+#
+# Every unmatched path is rewritten (status 200, not a 30x redirect) to
+# /index.html so React Router and Clerk's path-based sub-routes
+# (/sign-in/sso-callback, /sign-in/factor-two, ...) work after a hard
+# refresh or direct link.  Static assets and /api/* are served as-is.
+/*    /index.html   200

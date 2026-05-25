@@ -13,6 +13,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\""
   },
   "dependencies": {
+    "@clerk/react": "^6.7.1",
+    "@clerk/themes": "^2.4.57",
     "@tanstack/react-query": "^5.62.7",
     "@tanstack/react-table": "^8.20.6",
     "class-variance-authority": "^0.7.1",

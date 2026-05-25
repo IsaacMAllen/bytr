@@ -1,7 +1,13 @@
 # Cloudflare Pages SPA fall-through.
 #
-# Every unmatched path is rewritten (status 200, not a 30x redirect) to
-# /index.html so React Router and Clerk's path-based sub-routes
-# (/sign-in/sso-callback, /sign-in/factor-two, ...) work after a hard
-# refresh or direct link.  Static assets and /api/* are served as-is.
-/*    /index.html   200
+# Every unmatched path is rewritten (status 200, not a 30x redirect) so
+# React Router and Clerk's path-based sub-routes (/sign-in/sso-callback,
+# /sign-in/factor-two, ...) work after a hard refresh or direct link.
+#
+# Note: this rewrites to `/`, not `/index.html`.  Cloudflare's modern
+# Workers-based Pages deploys reject `/* /index.html 200` as a false-
+# positive "infinite loop" (https://github.com/cloudflare/workers-sdk/issues/11824)
+# even though that rule is universally correct.  Rewriting to `/` and
+# letting Cloudflare's default html_handling serve `index.html` from
+# there is functionally identical and passes the deploy validator.
+/*    /    200

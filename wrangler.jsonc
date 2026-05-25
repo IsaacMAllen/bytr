@@ -1,0 +1,12 @@
+{
+  // Cloudflare Workers static-assets deploy (used by the bytr Pages project).
+  // SPA routing is handled here instead of public/_redirects because the
+  // Workers deploy API rejects `/* /index.html 200` as an "infinite loop"
+  // (https://github.com/cloudflare/workers-sdk/issues/11824).
+  "name": "bytr",
+  "compatibility_date": "2025-05-25",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

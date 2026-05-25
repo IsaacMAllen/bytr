@@ -355,17 +355,12 @@ Cloudflare dashboard:
    inlines anything `VITE_*`-prefixed at `pnpm build` time.  Trigger a
    fresh build after editing.
 
-2. **`_redirects`** (or **Build → Output → Single-page application**
-   mode) — Cloudflare Pages needs to send every unmatched path to
-   `/index.html` so React Router and Clerk's path-based sub-routes
-   (`/sign-in/sso-callback`, etc.) work.  The simplest is a
-   `public/_redirects` file:
-
-   ```
-   /*    /index.html   200
-   ```
-
-   (already shipped — verify it's there before your first deploy).
+2. **SPA routing** — `wrangler.jsonc` at the repo root sets
+   `assets.not_found_handling: "single-page-application"` so unmatched
+   paths (e.g. `/sign-in/sso-callback`) serve `index.html` without a
+   `public/_redirects` file.  Do **not** add `/* /index.html 200` to
+   `_redirects`; Cloudflare's Workers deploy API rejects it as an
+   infinite loop ([workers-sdk#11824](https://github.com/cloudflare/workers-sdk/issues/11824)).
 
 3. **Allowed domain in Clerk** — once Cloudflare has assigned the Pages
    URL (e.g. `bytr.pages.dev`) and any custom domain, add them under
